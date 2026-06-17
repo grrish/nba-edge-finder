@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import sqlite3
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -13,14 +11,13 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 import requests
 
+from services.cache import CacheDB, CACHE_DB_PATH
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Paths & constants
+# Constants
 # ---------------------------------------------------------------------------
-
-_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-_CACHE_DB = _DATA_DIR / "cache.db"
 
 _TTL_HISTORICAL = 6 * 3600   # 6 hours
 _TTL_LIVE       = 30 * 60    # 30 minutes
@@ -34,67 +31,6 @@ _ESPN_HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
 
 
 # ---------------------------------------------------------------------------
-# SQLite cache
-# ---------------------------------------------------------------------------
-
-class _CacheDB:
-    """Thin key-value SQLite cache with per-entry TTL."""
-
-    def __init__(self, path: Path) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self._path = str(path)
-        self._init_schema()
-
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def _init_schema(self) -> None:
-        with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS cache (
-                    key       TEXT PRIMARY KEY,
-                    data      TEXT NOT NULL,
-                    stored_at REAL NOT NULL,
-                    ttl       INTEGER NOT NULL
-                )
-                """
-            )
-
-    def get(self, key: str) -> Optional[Any]:
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT data, stored_at, ttl FROM cache WHERE key = ?", (key,)
-            ).fetchone()
-        if row is None:
-            return None
-        age = time.time() - row["stored_at"]
-        if age > row["ttl"]:
-            logger.debug("Cache EXPIRED  key=%s  age=%.0fs", key, age)
-            return None
-        logger.debug("Cache HIT      key=%s  age=%.0fs", key, age)
-        return json.loads(row["data"])
-
-    def set(self, key: str, data: Any, ttl: int) -> None:
-        payload = json.dumps(data, default=str)
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO cache (key, data, stored_at, ttl)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(key) DO UPDATE SET
-                    data=excluded.data,
-                    stored_at=excluded.stored_at,
-                    ttl=excluded.ttl
-                """,
-                (key, payload, time.time(), ttl),
-            )
-        logger.debug("Cache STORED   key=%s  ttl=%ds", key, ttl)
-
-
-# ---------------------------------------------------------------------------
 # NBADataService
 # ---------------------------------------------------------------------------
 
@@ -102,7 +38,7 @@ class NBADataService:
     """Fetch and cache all NBA data needed by the ML model and edge engine."""
 
     def __init__(self) -> None:
-        self._cache = _CacheDB(_CACHE_DB)
+        self._cache = CacheDB(CACHE_DB_PATH)
 
     # ------------------------------------------------------------------
     # 1. Today's games

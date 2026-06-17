@@ -1,10 +1,17 @@
-"""Router for player prop predictions and edge-finding."""
+"""Router for player prop predictions, odds, and edge-finding."""
 
 from datetime import datetime
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from models.schemas import EdgeListResponse, PropPrediction, PropPredictionRequest
+from models.schemas import (
+    EdgeListResponse,
+    PropOdds,
+    PropPrediction,
+    PropPredictionRequest,
+    TodayPropsResponse,
+)
 from services.edge_engine import EdgeEngine
 from services.nba_data import NBADataService
 from services.odds import OddsService
@@ -13,12 +20,64 @@ from services.polymarket import PolymarketService
 router = APIRouter(prefix="/props", tags=["props"])
 
 
+# ---------------------------------------------------------------------------
+# Dependency factories
+# ---------------------------------------------------------------------------
+
+
+def _get_odds_service() -> OddsService:
+    return OddsService()
+
+
 def _get_edge_engine() -> EdgeEngine:
     return EdgeEngine(
         nba_service=NBADataService(),
         odds_service=OddsService(),
         polymarket_service=PolymarketService(),
     )
+
+
+# ---------------------------------------------------------------------------
+# NEW — today's prop lines
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/today",
+    response_model=TodayPropsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="All player props for today's NBA games",
+    description=(
+        "Fetch player prop lines (points / rebounds / assists) for every NBA "
+        "game on today's slate. Uses The Odds API with a 30-minute cache. "
+        "Returns an empty list during the offseason."
+    ),
+)
+async def today_props(
+    odds: OddsService = Depends(_get_odds_service),
+) -> TodayPropsResponse:
+    """Live NBA player props from The Odds API."""
+    games = odds.get_nba_game_lines(sport="basketball_nba")
+
+    all_props: List[PropOdds] = []
+    for game in games:
+        raw_props = odds.get_nba_player_props(game["game_id"], sport="basketball_nba")
+        for p in raw_props:
+            try:
+                all_props.append(PropOdds(**p))
+            except Exception:
+                pass  # skip malformed rows
+
+    return TodayPropsResponse(
+        props=all_props,
+        count=len(all_props),
+        generated_at=datetime.utcnow(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# EXISTING — ML predictions + edge scoring
+# ---------------------------------------------------------------------------
 
 
 @router.post(
