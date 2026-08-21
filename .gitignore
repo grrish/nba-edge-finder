@@ -42,3 +42,19 @@ frontend/build/
 .idea/
 *.swp
 *.swo
+
+# >>> context-specs (managed by `context-specs add` — do not edit inside markers) >>>
+.claude/skills/address-feedback
+.claude/skills/env-init
+.claude/skills/evaluate-pr
+.claude/skills/fix-local-checks
+.claude/skills/implement-mainspec
+.claude/skills/implement-slice
+.claude/skills/improve-context
+.claude/skills/learn
+.claude/skills/spec-planning
+.claude/skills/spec-validate
+.claude/skills/update-harness
+.claude/skills/wiki-init
+.claude/agents/slice-implementer.md
+# <<< context-specs <<<
