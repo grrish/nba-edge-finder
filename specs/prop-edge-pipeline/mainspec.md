@@ -52,6 +52,16 @@ The one placeholder that remains **intentionally untouched** going forward:
 by this feature landing — see `decision-predictor-ml-integration`'s "Until
 fulfilled" clause. This mainspec's job is prop wiring, not model wiring.
 
+**Expert memory is stale on `find_prop_edges` specifically.**
+`decision-predictor-ml-integration` and `pattern-dont-silently-fix-scaffolds`
+both still describe `find_prop_edges` as a stub that must not be
+implemented. This PRD is the explicit request that supersedes that clause —
+only the `model_prob = 0.5` / no-`NBAPredictor` half of "Until fulfilled"
+remains binding; the "don't implement `find_prop_edges`" half is discharged
+by this feature landing. `/learn` reconciles both Expert files post-merge;
+until then, an implementing agent that reads them will see a contradiction
+and should resolve it per this note, not per the stale file.
+
 ## User story
 
 As the developer, I can call `find_prop_edges()` (directly or via
@@ -119,6 +129,15 @@ the feature's definition of done.
   slice — the PRD explicitly scopes out ML integration, Polymarket prop
   matching, real player-ID resolution, and frontend work (see PRD "Out of
   scope"). Do not build hooks for any of these.
+- Known, accepted, time-boxed limitation: `find_prop_edges` hardcodes
+  `_WNBA_SPORT`, while `GET /props/today` in `props.py` hardcodes
+  `basketball_nba`. During the WNBA season (now) this is invisible; once
+  the NBA season starts, `GET /api/v1/props/edges` will go back to
+  returning an empty list (behaviorally identical to the pre-this-feature
+  stub) until a future feature parameterizes the sport. This is accepted
+  as out of scope for this PRD — do not change `_WNBA_SPORT` to "fix" it
+  as part of slices 1.1 or 1.2 — but it is a known gap for whoever plans
+  the next prop-edge feature, not an oversight.
 - If `find_game_edges`'s pre-existing `get_game_odds()` /
   `decimal_to_implied_prob()` bug is ever fixed in a later PRD, that work
   should not touch `find_prop_edges`/`_score_prop_edge` — the two paths are
