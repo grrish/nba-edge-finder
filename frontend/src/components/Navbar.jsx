@@ -4,6 +4,7 @@ const links = [
   { to: "/", label: "Dashboard" },
   { to: "/games", label: "Games" },
   { to: "/props", label: "Props" },
+  { to: "/markets", label: "Markets" },
 ];
 
 export default function Navbar() {
