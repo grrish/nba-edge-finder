@@ -108,7 +108,7 @@ class PolymarketService:
         try:
             resp = requests.get(
                 f"{_GAMMA_BASE}/events",
-                params={"active": "true", "limit": limit, "tag_slug": tag_slug},
+                params={"active": "true", "closed": "false", "limit": limit, "tag_slug": tag_slug},
                 headers=_REQ_HEADERS,
                 timeout=15,
             )
