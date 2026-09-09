@@ -34,9 +34,9 @@ and render it in the frontend — proof the pipeline genuinely works.
   `"poly_nba_markets"` (line 90) — must become tag-aware or WNBA/NBA calls
   will collide in the shared `CacheDB`.
 - `backend/services/odds.py` — the pattern to mirror exactly:
-  `_WNBA_SPORT = "basketball_wnba"` module constant (line 409),
-  `get_nba_game_lines(self, sport: str = _NBA_SPORT)` (line 438), cache key
-  `f"odds_lines:{sport}"` (line 451) — already tag/sport-aware in the cache
+  `_WNBA_SPORT = "basketball_wnba"` module constant (line 19),
+  `get_nba_game_lines(self, sport: str = _NBA_SPORT)` (line 48), cache key
+  `f"odds_lines:{sport}"` (line 61) — already tag/sport-aware in the cache
   key, which `polymarket.py` is not yet.
 - `backend/routers/games.py` — existing routes on `router = APIRouter(prefix="/games", ...)`
   mounted at `/api/v1` in `main.py`. `_get_poly_service()` dependency
@@ -51,9 +51,18 @@ and render it in the frontend — proof the pipeline genuinely works.
   strictly required (tag_slug arrives as a query param), but if a default
   tag needs to live somewhere other than a literal, it goes through
   `Settings`, not a bare module constant duplicated across files.
-- `backend/main.py` — `SecurityHeadersMiddleware` and the `Limiter` already
-  wrap every route via `app.add_middleware` / `app.state.limiter`; the new
-  route gets these for free by living in `routers/games.py`.
+- `backend/main.py` — `SecurityHeadersMiddleware` wraps every route via
+  `app.add_middleware`; the new route gets this for free by living in
+  `routers/games.py`. The `Limiter` is configured (`app.state.limiter`) but
+  `SlowAPIMiddleware` is never registered and no route uses
+  `@limiter.limit(...)` — rate limiting is not actually enforced anywhere in
+  this app today. That's pre-existing and out of scope for this feature; do
+  not wire it up as a drive-by fix.
+- **Verification posture:** no test framework exists in this repo (no
+  `pytest`, no `vitest`/`jest`) and the PRD forbids new dependencies. This
+  feature adds none. `./prds/polymarket-live-data/run-prd-test.sh` is the
+  only gate — see each slice's Success Criteria for the manual/smoke-test
+  command to use during implementation instead of a unit test.
 - `frontend/src/pages/Games.jsx`, `Props.jsx` — the established page
   pattern: `useEffect` + `client.get(...)` + `loading`/`error`/data state,
   Tailwind card list. New page follows this shape.
@@ -79,6 +88,12 @@ and render it in the frontend — proof the pipeline genuinely works.
 - No game-matching for non-NBA sports — new endpoint returns raw markets.
 - No browser/visual verification — build success + static grep checks only.
 - No new dependencies (frontend or backend).
+- `get_market_probability` (`polymarket.py:249`) continues to call
+  `get_nba_markets()` with no tag argument, so it only ever resolves IDs
+  from the default (`nba`) tag's cache entry. A `market_id` returned by
+  `/api/v1/games/markets?tag_slug=wnba` won't resolve there. Harmless today
+  (nothing currently passes non-NBA IDs to it) — noted here as a scope
+  decision, not an oversight; adding a `tag_slug` param to it is future work.
 
 ## Slice Dependency Map
 
