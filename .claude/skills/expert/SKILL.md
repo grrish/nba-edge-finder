@@ -47,7 +47,9 @@ current state in code before planning against it.
 
 | Reference | USE WHEN |
 |---|---|
-| _(empty — the first /learn, Reflect, or your own edit adds the first shard)_ | |
+| [[decision-predictor-ml-integration]] | Touching edge_engine.py / predictor.py, or asked to improve predictions or implement prop edges |
+| [[pattern-dont-silently-fix-scaffolds]] | About to "clean up" or "fix" placeholder-looking code while doing unrelated work |
+| [[concept-cache-backend-choice]] | Touching services/cache.py or considering a different caching backend |
 
 ## Writing to this memory
 
