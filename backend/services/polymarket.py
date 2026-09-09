@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 _GAMMA_BASE   = "https://gamma-api.polymarket.com"
 _REQ_HEADERS  = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
 
+TAG_NBA       = "nba"     # public: Slice 1.2's router imports this as the route default
+_TAG_WNBA     = "wnba"    # used as live stand-in for NBA markets during the offseason
 _TTL_MARKETS  = 15 * 60   # 15 min — prices move faster than odds
 
 # Common NBA team name fragments used in fuzzy matching
@@ -73,8 +75,8 @@ class PolymarketService:
     # 1. Market discovery
     # ------------------------------------------------------------------
 
-    def get_nba_markets(self) -> List[Dict]:
-        """Fetch all active NBA markets from Polymarket's Gamma API.
+    def get_nba_markets(self, tag_slug: str = TAG_NBA) -> List[Dict]:
+        """Fetch all active markets for *tag_slug* from Polymarket's Gamma API.
 
         Each dict contains:
             market_id, question, outcome_a, outcome_b,
@@ -87,17 +89,18 @@ class PolymarketService:
         Returns a mix of game markets and futures; callers can filter
         by question content or match via match_to_game().
         """
-        key = "poly_nba_markets"
+        key = f"poly_markets:{tag_slug}"
         cached = self._cache.get(key)
         if cached is not None:
             return cached
 
-        logger.info("API CALL  get_nba_markets  source=Gamma")
-        markets = self._fetch_gamma_markets(tag_slug="nba", limit=200)
+        logger.info("API CALL  get_nba_markets  source=Gamma  tag_slug=%s", tag_slug)
+        markets = self._fetch_gamma_markets(tag_slug=tag_slug, limit=200)
 
         structured = [self._parse_market(m) for m in markets if self._is_relevant(m)]
-        logger.info("Polymarket: %d structured NBA markets returned", len(structured))
-        self._cache.set(key, structured, _TTL_MARKETS)
+        logger.info("Polymarket: %d structured markets returned (tag_slug=%s)", len(structured), tag_slug)
+        if structured:
+            self._cache.set(key, structured, _TTL_MARKETS)
         return structured
 
     def _fetch_gamma_markets(self, tag_slug: str, limit: int) -> List[Dict]:

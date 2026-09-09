@@ -17,6 +17,12 @@ than assuming.
   offseason, odds.py:19) — deliberate scaffolding to sanity-check
   parsing/caching against live data when NBA markets are empty. Not leftover
   test code; don't remove it or restrict the service to NBA-only.
+- `_TAG_WNBA` in `polymarket.py` (same purpose, added alongside
+  `get_nba_markets(tag_slug: str = TAG_NBA)`) — mirrors `_WNBA_SPORT` above;
+  a live stand-in for NBA-tagged Polymarket markets during the offseason.
+  `TAG_NBA` is the public default re-exported for `routers/games.py` to
+  import rather than duplicating the `"nba"` literal. Don't remove either
+  constant or restrict `get_nba_markets` back to NBA-only.
 
 ## Why
 
