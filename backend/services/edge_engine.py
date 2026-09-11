@@ -167,10 +167,11 @@ class EdgeEngine:
             return edges
 
         for game in games:
+            gid = game.get("game_id")
             try:
-                props = self._odds.get_nba_player_props(game["game_id"], sport=_WNBA_SPORT)
+                props = self._odds.get_nba_player_props(gid, sport=_WNBA_SPORT)
             except Exception:
-                logger.exception("Failed to fetch player props for game %s", game["game_id"])
+                logger.exception("Failed to fetch player props for game %s", gid)
                 continue
 
             for prop in props:
