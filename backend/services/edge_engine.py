@@ -21,6 +21,7 @@ from services.polymarket import PolymarketService
 logger = logging.getLogger(__name__)
 
 _MIN_EDGE_THRESHOLD = 0.02  # only surface opportunities with ≥2 % edge
+_WNBA_SPORT = "basketball_wnba"  # live stand-in for NBA odds during the offseason — mirrors odds.py
 
 
 class EdgeEngine:
@@ -152,8 +153,69 @@ class EdgeEngine:
     async def find_prop_edges(
         self, player_id: Optional[str] = None
     ) -> List[EdgeScore]:
-        """Return +EV prop opportunities for today's slate."""
-        # Full implementation will iterate today's games, fetch prop odds,
-        # run the ML model, and score each prop line.
-        logger.info("Prop edge scanning — player_id filter: %s", player_id)
-        return []
+        """Return +EV prop opportunities for today's slate.
+
+        *player_id*, if given, is matched case-insensitively against a prop's
+        `player_name` — the odds pipeline has no NBA-player-ID-to-name
+        mapping, so this is a name filter, not a real ID lookup.
+        """
+        edges: List[EdgeScore] = []
+        try:
+            games = self._odds.get_nba_game_lines(sport=_WNBA_SPORT)
+        except Exception:
+            logger.exception("Failed to fetch game lines for prop scan")
+            return edges
+
+        for game in games:
+            gid = game.get("game_id")
+            try:
+                props = self._odds.get_nba_player_props(gid, sport=_WNBA_SPORT)
+            except Exception:
+                logger.exception("Failed to fetch player props for game %s", gid)
+                continue
+
+            for prop in props:
+                if player_id and prop.get("player_name", "").lower() != player_id.lower():
+                    continue
+                edge = self._score_prop_edge(prop)
+                if edge and edge.is_positive_ev:
+                    edges.append(edge)
+
+        edges.sort(key=lambda e: e.best_edge, reverse=True)
+        return edges
+
+    def _score_prop_edge(self, prop: dict) -> Optional[EdgeScore]:
+        """Build an EdgeScore for a single player-prop dict from OddsService."""
+        try:
+            player_name = prop["player_name"]
+            stat_type = prop["stat_type"]
+            line = prop["line"]
+            over_prob = prop["over_prob"]
+
+            market_prices: List[MarketPrice] = [
+                MarketPrice(
+                    source=prop["bookmaker"],
+                    implied_probability=over_prob,
+                    odds_american=prop["over_american"],
+                )
+            ]
+
+            # TODO: integrate ML model probability once predictor is trained
+            # Placeholder: use 0.5 until the model is wired in — see decision-predictor-ml-integration
+            model_prob: float = 0.5
+            edge_value = model_prob - over_prob
+
+            return EdgeScore(
+                event_id=f"{prop['game_id']}:{player_name}:{stat_type}",
+                event_type="prop",
+                description=f"{player_name} — over {line} {stat_type}",
+                model_probability=model_prob,
+                market_prices=market_prices,
+                best_edge=edge_value,
+                best_source=prop["bookmaker"],
+                kelly_fraction=max(0.0, edge_value / (1 - over_prob)) if over_prob < 1 else 0.0,
+                is_positive_ev=edge_value >= _MIN_EDGE_THRESHOLD,
+            )
+        except Exception:
+            logger.exception("Error scoring prop edge for %s", prop.get("player_name"))
+            return None
