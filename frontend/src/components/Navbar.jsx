@@ -5,6 +5,7 @@ const links = [
   { to: "/games", label: "Games" },
   { to: "/props", label: "Props" },
   { to: "/markets", label: "Markets" },
+  { to: "/promos", label: "Promos" },
 ];
 
 export default function Navbar() {
