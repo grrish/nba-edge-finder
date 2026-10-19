@@ -64,13 +64,13 @@ class EdgeEngine:
         """Return +EV game-winner opportunities for today's slate."""
         edges: List[EdgeScore] = []
         try:
-            market_odds = self._odds.get_game_odds()
+            games = self._odds.get_nba_game_lines()
         except Exception:
-            logger.exception("Failed to fetch game odds")
+            logger.exception("Failed to fetch game lines")
             return edges
 
-        for game in market_odds:
-            if game_id and game.get("id") != game_id:
+        for game in games:
+            if game_id and game.get("game_id") != game_id:
                 continue
             edge = self._score_game_edge(game)
             if edge and edge.is_positive_ev:
@@ -80,37 +80,29 @@ class EdgeEngine:
         return edges
 
     def _score_game_edge(self, game: dict) -> Optional[EdgeScore]:
-        """Build an EdgeScore for a single game dict from the Odds API."""
+        """Build an EdgeScore for a single game dict from OddsService.get_nba_game_lines()."""
         try:
             home_team = game["home_team"]
             away_team = game["away_team"]
-            event_id = game["id"]
+            event_id = game["game_id"]
 
-            market_prices: List[MarketPrice] = []
-            best_implied: float = 1.0
-            best_source: str = ""
+            home_best = game.get("home_best")
+            if not home_best:
+                return None
 
-            for bookmaker in game.get("bookmakers", []):
-                for market in bookmaker.get("markets", []):
-                    if market["key"] != "h2h":
-                        continue
-                    for outcome in market.get("outcomes", []):
-                        if outcome["name"] != home_team:
-                            continue
-                        decimal = float(outcome["price"])
-                        implied = self._odds.decimal_to_implied_prob(decimal)
-                        mp = MarketPrice(
-                            source=bookmaker["key"],
-                            implied_probability=implied,
-                            odds_decimal=decimal,
-                        )
-                        market_prices.append(mp)
-                        if implied < best_implied:
-                            best_implied = implied
-                            best_source = bookmaker["key"]
+            implied = self._odds.american_odds_to_prob(home_best["american_odds"])
+            market_prices: List[MarketPrice] = [
+                MarketPrice(
+                    source=home_best["bookmaker"],
+                    implied_probability=implied,
+                    odds_american=home_best["american_odds"],
+                )
+            ]
+            best_implied = implied
+            best_source = home_best["bookmaker"]
 
             # TODO: integrate ML model probability once predictor is trained
-            # Placeholder: use 0.5 until the model is wired in
+            # Placeholder: use 0.5 until the model is wired in — see decision-predictor-ml-integration
             model_prob: float = 0.5
             edge_value = model_prob - best_implied
 
@@ -126,7 +118,7 @@ class EdgeEngine:
                 is_positive_ev=edge_value >= _MIN_EDGE_THRESHOLD,
             )
         except Exception:
-            logger.exception("Error scoring game edge for event %s", game.get("id"))
+            logger.exception("Error scoring game edge for event %s", game.get("game_id"))
             return None
 
     # ------------------------------------------------------------------
