@@ -15,7 +15,7 @@ from slowapi.util import get_remote_address
 from config import get_settings
 from middleware.security import SecurityHeadersMiddleware
 from models.schemas import HealthResponse
-from routers import games, props
+from routers import games, promos, props
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
 logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -77,6 +77,7 @@ app.add_middleware(
 
 app.include_router(games.router, prefix="/api/v1")
 app.include_router(props.router, prefix="/api/v1")
+app.include_router(promos.router, prefix="/api/v1")
 
 
 # ---------------------------------------------------------------------------
