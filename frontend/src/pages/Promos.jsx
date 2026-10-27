@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import client from "../api/client";
-import { isExpiringSoon, sortByExpiry } from "../utils/promos";
+import { isExpiringSoon, parsePromoText, sortForDisplay } from "../utils/promos";
 
 const PROMO_TYPES = [
   { value: "signup_bonus", label: "Signup bonus" },
@@ -24,6 +24,7 @@ export default function Promos() {
   const [error, setError] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [pasteText, setPasteText] = useState("");
 
   function loadPromos() {
     setLoading(true);
@@ -42,6 +43,19 @@ export default function Promos() {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
+  function handlePasteTextChange(e) {
+    const value = e.target.value;
+    setPasteText(value);
+    const parsed = parsePromoText(value);
+    setForm((prev) => ({
+      ...prev,
+      sportsbook: parsed.sportsbook || prev.sportsbook,
+      promo_type: parsed.promo_type || prev.promo_type,
+      amount: parsed.amount || prev.amount,
+      expiry_date: parsed.expiry_date || prev.expiry_date,
+    }));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setSubmitting(true);
@@ -49,6 +63,7 @@ export default function Promos() {
     try {
       await client.post("/api/v1/promos", form);
       setForm(EMPTY_FORM);
+      setPasteText("");
       await loadPromos();
     } catch (err) {
       setError(err.message);
@@ -57,9 +72,9 @@ export default function Promos() {
     }
   }
 
-  async function markUsed(id) {
+  async function setStatus(id, status) {
     try {
-      await client.patch(`/api/v1/promos/${id}`, { status: "used" });
+      await client.patch(`/api/v1/promos/${id}`, { status });
       await loadPromos();
     } catch (err) {
       setError(err.message);
@@ -75,11 +90,19 @@ export default function Promos() {
     }
   }
 
-  const sorted = sortByExpiry(promos);
+  const sorted = sortForDisplay(promos);
 
   return (
     <main className="p-8">
       <h1 className="text-3xl font-bold mb-6">Promos</h1>
+
+      <textarea
+        value={pasteText}
+        onChange={handlePasteTextChange}
+        placeholder={'Paste a promo here to fill the form below, e.g. "DraftKings: bet $5 get $150 in bonus bets, expires 10/31"'}
+        rows={2}
+        className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-sm mb-4 placeholder:text-slate-500"
+      />
 
       <form
         onSubmit={handleSubmit}
@@ -146,12 +169,13 @@ export default function Promos() {
       <div className="space-y-3">
         {sorted.map((promo) => {
           const flagged = isExpiringSoon(promo);
+          const dimmed = promo.status !== "available";
           return (
             <div
               key={promo.id}
               className={`bg-slate-800 rounded-2xl p-5 border flex items-center justify-between ${
                 flagged ? "border-amber-500" : "border-slate-700"
-              }`}
+              } ${dimmed ? "opacity-50" : ""}`}
             >
               <div>
                 <p className="font-semibold">
@@ -172,10 +196,18 @@ export default function Promos() {
                 )}
                 {promo.status === "available" && (
                   <button
-                    onClick={() => markUsed(promo.id)}
+                    onClick={() => setStatus(promo.id, "used")}
                     className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded-lg px-3 py-1.5"
                   >
                     Mark used
+                  </button>
+                )}
+                {promo.status === "used" && (
+                  <button
+                    onClick={() => setStatus(promo.id, "available")}
+                    className="text-xs text-slate-300 hover:text-white border border-slate-600 rounded-lg px-3 py-1.5"
+                  >
+                    Mark available
                   </button>
                 )}
                 <button
