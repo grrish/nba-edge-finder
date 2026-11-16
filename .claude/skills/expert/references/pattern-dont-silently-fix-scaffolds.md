@@ -13,20 +13,23 @@ than assuming.
 
 - `model_prob = 0.5` in `edge_engine.py` and the stub `find_prop_edges` —
   see [[decision-predictor-ml-integration]].
-- `_WNBA_SPORT` in `odds.py` (used as a live stand-in for NBA odds during the
-  offseason, odds.py:19) — deliberate scaffolding to sanity-check
-  parsing/caching against live data when NBA markets are empty. Not leftover
-  test code; don't remove it or restrict the service to NBA-only.
+- `WNBA_SPORT` in `odds.py` (odds.py:19) — as of 2026-11, the NBA season is
+  live and `NBA_SPORT` is the default everywhere (`get_nba_game_lines`,
+  `get_nba_player_props`, `EdgeEngine.find_prop_edges`). `WNBA_SPORT` is kept
+  as an explicit offseason fallback, not a default — pass it only when NBA
+  markets are genuinely empty (summer). Both constants are now public (were
+  `_NBA_SPORT`/`_WNBA_SPORT`) so callers can swap sport explicitly instead of
+  the module silently picking one.
 - `_NBA_API_SLEEP = 0.6` in `nba_data.py:25`, called before every `nba_api`
   request (8 call sites) — a deliberate rate-limit guard, not dead weight or
   an accidental slowdown. Don't remove it or shrink it to "optimize" latency;
   don't parallelize the calls it's meant to throttle.
-- `_TAG_WNBA` in `polymarket.py` (same purpose, added alongside
-  `get_nba_markets(tag_slug: str = TAG_NBA)`) — mirrors `_WNBA_SPORT` above;
-  a live stand-in for NBA-tagged Polymarket markets during the offseason.
-  `TAG_NBA` is the public default re-exported for `routers/games.py` to
-  import rather than duplicating the `"nba"` literal. Don't remove either
-  constant or restrict `get_nba_markets` back to NBA-only.
+- `TAG_WNBA` in `polymarket.py` (same purpose, alongside
+  `get_nba_markets(tag_slug: str = TAG_NBA)`) — mirrors `WNBA_SPORT` above:
+  NBA is live, so `TAG_NBA` is the default tag for the Markets page and the
+  `/games/markets` endpoint. `TAG_WNBA` (was private `_TAG_WNBA`) is kept as
+  an explicit offseason fallback only. Don't remove either constant or
+  restrict `get_nba_markets` back to NBA-only.
 
 ## Why
 

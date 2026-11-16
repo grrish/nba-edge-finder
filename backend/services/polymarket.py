@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 _GAMMA_BASE   = "https://gamma-api.polymarket.com"
 _REQ_HEADERS  = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
 
-TAG_NBA       = "nba"     # public: Slice 1.2's router imports this as the route default
-_TAG_WNBA     = "wnba"    # used as live stand-in for NBA markets during the offseason
+TAG_NBA       = "nba"     # public: default tag — routers/games.py imports this
+TAG_WNBA      = "wnba"    # public: offseason fallback when NBA markets are empty
 _TTL_MARKETS  = 15 * 60   # 15 min — prices move faster than odds
 
 # Common NBA team name fragments used in fuzzy matching

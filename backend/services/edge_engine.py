@@ -15,13 +15,12 @@ from models.schemas import (
 )
 from models.predictor import NBAPredictor
 from services.nba_data import NBADataService
-from services.odds import OddsService
+from services.odds import OddsService, NBA_SPORT
 from services.polymarket import PolymarketService
 
 logger = logging.getLogger(__name__)
 
 _MIN_EDGE_THRESHOLD = 0.02  # only surface opportunities with ≥2 % edge
-_WNBA_SPORT = "basketball_wnba"  # live stand-in for NBA odds during the offseason — mirrors odds.py
 
 
 class EdgeEngine:
@@ -143,17 +142,20 @@ class EdgeEngine:
             return None
 
     async def find_prop_edges(
-        self, player_id: Optional[str] = None
+        self, player_id: Optional[str] = None, sport: str = NBA_SPORT
     ) -> List[EdgeScore]:
         """Return +EV prop opportunities for today's slate.
 
         *player_id*, if given, is matched case-insensitively against a prop's
         `player_name` — the odds pipeline has no NBA-player-ID-to-name
         mapping, so this is a name filter, not a real ID lookup.
+
+        *sport* defaults to live NBA; pass the WNBA sport key as an offseason
+        fallback when NBA markets are empty.
         """
         edges: List[EdgeScore] = []
         try:
-            games = self._odds.get_nba_game_lines(sport=_WNBA_SPORT)
+            games = self._odds.get_nba_game_lines(sport=sport)
         except Exception:
             logger.exception("Failed to fetch game lines for prop scan")
             return edges
@@ -161,7 +163,7 @@ class EdgeEngine:
         for game in games:
             gid = game.get("game_id")
             try:
-                props = self._odds.get_nba_player_props(gid, sport=_WNBA_SPORT)
+                props = self._odds.get_nba_player_props(gid, sport=sport)
             except Exception:
                 logger.exception("Failed to fetch player props for game %s", gid)
                 continue
