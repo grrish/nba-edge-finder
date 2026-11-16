@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Rate limiting
     rate_limit: str = "100/minute"
 
+    # Promos tracker — path to the persistent SQLite store, relative to
+    # backend/. Overridable so tests can point it at a temp file.
+    promos_db_path: str = "data/promos.db"
+
     @field_validator("environment")
     @classmethod
     def validate_environment(cls, v: str) -> str:

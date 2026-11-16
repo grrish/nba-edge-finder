@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import date, datetime
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -200,3 +201,50 @@ class TodayMarketsResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     environment: str
+
+
+# ---------------------------------------------------------------------------
+# Promos tracker (manual entry — no free sportsbook-promo API exists)
+# ---------------------------------------------------------------------------
+
+
+class PromoType(str, Enum):
+    signup_bonus = "signup_bonus"
+    odds_boost = "odds_boost"
+    free_bet = "free_bet"
+    deposit_match = "deposit_match"
+    other = "other"
+
+
+class PromoStatus(str, Enum):
+    available = "available"
+    used = "used"
+    expired = "expired"
+
+
+class PromoCreate(BaseModel):
+    sportsbook: str = Field(..., min_length=1)
+    promo_type: PromoType
+    amount: str = Field(..., min_length=1, description="Free text, e.g. '$50 free bet'")
+    expiry_date: date
+    notes: Optional[str] = None
+
+
+class PromoUpdate(BaseModel):
+    status: PromoStatus
+
+
+class Promo(BaseModel):
+    id: int
+    sportsbook: str
+    promo_type: PromoType
+    amount: str
+    expiry_date: date
+    status: PromoStatus
+    notes: Optional[str] = None
+    created_at: datetime
+
+
+class PromoListResponse(BaseModel):
+    promos: List[Promo]
+    count: int

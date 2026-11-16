@@ -2,6 +2,8 @@ import { Route, Routes } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Dashboard from "./pages/Dashboard";
 import Games from "./pages/Games";
+import Markets from "./pages/Markets";
+import Promos from "./pages/Promos";
 import Props from "./pages/Props";
 
 export default function App() {
@@ -13,6 +15,8 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/games" element={<Games />} />
           <Route path="/props" element={<Props />} />
+          <Route path="/markets" element={<Markets />} />
+          <Route path="/promos" element={<Promos />} />
         </Routes>
       </div>
     </div>

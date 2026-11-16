@@ -50,6 +50,7 @@ current state in code before planning against it.
 | [[decision-predictor-ml-integration]] | Touching edge_engine.py / predictor.py, or asked to improve predictions or implement prop edges |
 | [[pattern-dont-silently-fix-scaffolds]] | About to "clean up" or "fix" placeholder-looking code while doing unrelated work |
 | [[concept-cache-backend-choice]] | Touching services/cache.py or considering a different caching backend |
+| [[invariant-gamma-closed-filter]] | Querying Polymarket's Gamma API for live/open markets, in polymarket.py or any new caller |
 
 ## Writing to this memory
 

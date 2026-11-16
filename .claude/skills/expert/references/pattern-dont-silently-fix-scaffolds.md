@@ -21,6 +21,12 @@ than assuming.
   request (8 call sites) — a deliberate rate-limit guard, not dead weight or
   an accidental slowdown. Don't remove it or shrink it to "optimize" latency;
   don't parallelize the calls it's meant to throttle.
+- `_TAG_WNBA` in `polymarket.py` (same purpose, added alongside
+  `get_nba_markets(tag_slug: str = TAG_NBA)`) — mirrors `_WNBA_SPORT` above;
+  a live stand-in for NBA-tagged Polymarket markets during the offseason.
+  `TAG_NBA` is the public default re-exported for `routers/games.py` to
+  import rather than duplicating the `"nba"` literal. Don't remove either
+  constant or restrict `get_nba_markets` back to NBA-only.
 
 ## Why
 

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from models.schemas import (
     EdgeListResponse,
@@ -18,7 +18,7 @@ from models.schemas import (
 from services.edge_engine import EdgeEngine
 from services.nba_data import NBADataService
 from services.odds import OddsService
-from services.polymarket import PolymarketService
+from services.polymarket import TAG_NBA, PolymarketService
 
 router = APIRouter(prefix="/games", tags=["games"])
 
@@ -123,6 +123,32 @@ async def today_games_with_markets(
         count=len(results),
         generated_at=datetime.utcnow(),
     )
+
+
+@router.get(
+    "/markets",
+    response_model=List[PolymarketMarket],
+    status_code=status.HTTP_200_OK,
+    summary="Raw Polymarket markets for a sport/tag",
+    description=(
+        "Return live Polymarket market data for the given tag_slug, "
+        "independent of today's scheduled games. Defaults to NBA; pass "
+        "tag_slug=wnba to reach live data during the NBA offseason."
+    ),
+)
+async def markets(
+    tag_slug: str = Query(TAG_NBA, pattern=r"^[a-z0-9-]{1,32}$"),
+    poly: PolymarketService = Depends(_get_poly_service),
+) -> List[PolymarketMarket]:
+    """Raw Polymarket markets for tag_slug, no game-matching."""
+    raw = poly.get_nba_markets(tag_slug=tag_slug)
+    structured = []
+    for m in raw:
+        try:
+            structured.append(PolymarketMarket(**m))
+        except Exception:
+            pass
+    return structured
 
 
 # ---------------------------------------------------------------------------
