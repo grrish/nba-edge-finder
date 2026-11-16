@@ -161,6 +161,84 @@ class NBADataService:
         return rows
 
     # ------------------------------------------------------------------
+    # 1b. Historical season results (team-level, for the backfill pipeline)
+    # ------------------------------------------------------------------
+
+    def get_season_game_results(
+        self, season: str, league_id: str = "00"
+    ) -> List[Dict]:
+        """Return one row per completed game for *season* (team-level result).
+
+        *league_id*: "00" = NBA (default), "10" = WNBA.
+
+        Each entry contains:
+            game_id, game_date, season, league_id,
+            home_team, away_team, home_score, away_score, winner ("home"/"away")
+
+        Pairs LeagueGameFinder's one-row-per-team rows into one row per game,
+        same pairing approach as `_fetch_games_on_date`. Cached since a past
+        season's results don't change once the season is complete.
+        """
+        key = f"season_results:{league_id}:{season}"
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
+
+        logger.info(
+            "API CALL  get_season_game_results  season=%s  league_id=%s", season, league_id
+        )
+        from nba_api.stats.endpoints import leaguegamefinder
+
+        time.sleep(_NBA_API_SLEEP)
+        lgf = leaguegamefinder.LeagueGameFinder(
+            season_nullable=season,
+            league_id_nullable=league_id,
+            season_type_nullable="Regular Season",
+        )
+        df = lgf.get_data_frames()[0]
+        if df.empty:
+            self._cache.set(key, [], _TTL_HISTORICAL)
+            return []
+
+        game_map: Dict[str, Dict] = {}
+        for _, r in df.iterrows():
+            gid = str(r["GAME_ID"])
+            matchup = str(r["MATCHUP"])
+            is_home = "vs." in matchup
+            side = "home" if is_home else "away"
+            entry = game_map.setdefault(
+                gid, {"game_id": gid, "game_date": str(r["GAME_DATE"])}
+            )
+            entry[f"{side}_team"] = r["TEAM_NAME"]
+            entry[f"{side}_score"] = int(r["PTS"]) if pd.notna(r["PTS"]) else None
+            entry[f"{side}_wl"] = str(r["WL"]) if pd.notna(r["WL"]) else None
+
+        results = []
+        for entry in game_map.values():
+            if not (entry.get("home_team") and entry.get("away_team")):
+                continue
+            winner = "home" if entry.get("home_wl") == "W" else "away"
+            results.append(
+                {
+                    "game_id": entry["game_id"],
+                    "game_date": entry["game_date"],
+                    "season": season,
+                    "league_id": league_id,
+                    "home_team": entry["home_team"],
+                    "away_team": entry["away_team"],
+                    "home_score": entry.get("home_score"),
+                    "away_score": entry.get("away_score"),
+                    "winner": winner,
+                }
+            )
+
+        logger.info(
+            "Parsed %d games for season=%s league_id=%s", len(results), season, league_id
+        )
+        self._cache.set(key, results, _TTL_HISTORICAL)
+        return results
+
+    # ------------------------------------------------------------------
     # 2. Team rolling stats
     # ------------------------------------------------------------------
 
