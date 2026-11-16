@@ -8,7 +8,7 @@ export default function Markets() {
 
   useEffect(() => {
     client
-      .get("/api/v1/games/markets", { params: { tag_slug: "wnba" } })
+      .get("/api/v1/games/markets", { params: { tag_slug: "nba" } })
       .then((r) => setMarkets(r.data ?? []))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));

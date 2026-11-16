@@ -15,8 +15,8 @@ from services.cache import CacheDB, CACHE_DB_PATH
 logger = logging.getLogger(__name__)
 
 _BASE_URL     = "https://api.the-odds-api.com/v4"
-_NBA_SPORT    = "basketball_nba"
-_WNBA_SPORT   = "basketball_wnba"   # used as live stand-in during NBA offseason
+NBA_SPORT     = "basketball_nba"   # public: default sport across routers/services
+WNBA_SPORT    = "basketball_wnba"  # public: offseason fallback when NBA markets are empty
 _REGIONS      = "us"
 _ODDS_FORMAT  = "american"
 
@@ -45,7 +45,7 @@ class OddsService:
     # 1. Game lines
     # ------------------------------------------------------------------
 
-    def get_nba_game_lines(self, sport: str = _NBA_SPORT) -> List[Dict]:
+    def get_nba_game_lines(self, sport: str = NBA_SPORT) -> List[Dict]:
         """Return structured game-line data for all current NBA events.
 
         Each dict contains:
@@ -95,7 +95,7 @@ class OddsService:
 
         return {
             "game_id":         raw["id"],
-            "sport":           raw.get("sport_key", _NBA_SPORT),
+            "sport":           raw.get("sport_key", NBA_SPORT),
             "home_team":       home,
             "away_team":       away,
             "commence_time":   raw.get("commence_time", ""),
@@ -174,7 +174,7 @@ class OddsService:
     def get_nba_player_props(
         self,
         game_id: str,
-        sport: str = _NBA_SPORT,
+        sport: str = NBA_SPORT,
     ) -> List[Dict]:
         """Return all player props for a specific game.
 
