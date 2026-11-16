@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     # backend/. Overridable so tests can point it at a temp file.
     promos_db_path: str = "data/promos.db"
 
+    # Historical game-results pipeline — persistent SQLite store, relative to
+    # backend/. Separate from cache.db (TTL-based, ephemeral): this one holds
+    # backfilled team-level results indefinitely until re-backfilled.
+    games_history_db_path: str = "data/games_history.db"
+
     @field_validator("environment")
     @classmethod
     def validate_environment(cls, v: str) -> str:
