@@ -49,10 +49,18 @@ class GamesHistoryStore:
                     home_score INTEGER,
                     away_score INTEGER,
                     winner     TEXT NOT NULL,
+                    game_type  TEXT,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
+            # Migration for DBs created before game_type existed — add it in
+            # place rather than recreating the table, so existing rows survive.
+            existing_cols = {
+                row["name"] for row in conn.execute("PRAGMA table_info(games)")
+            }
+            if "game_type" not in existing_cols:
+                conn.execute("ALTER TABLE games ADD COLUMN game_type TEXT")
 
     def upsert_many(self, rows: List[Dict]) -> int:
         """Insert or update *rows* by game_id. Returns the number of rows written."""
@@ -62,8 +70,8 @@ class GamesHistoryStore:
                 """
                 INSERT INTO games
                     (game_id, season, league_id, game_date, home_team, away_team,
-                     home_score, away_score, winner, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     home_score, away_score, winner, game_type, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(game_id) DO UPDATE SET
                     season=excluded.season,
                     league_id=excluded.league_id,
@@ -73,6 +81,7 @@ class GamesHistoryStore:
                     home_score=excluded.home_score,
                     away_score=excluded.away_score,
                     winner=excluded.winner,
+                    game_type=excluded.game_type,
                     updated_at=excluded.updated_at
                 """,
                 [
@@ -86,6 +95,7 @@ class GamesHistoryStore:
                         r.get("home_score"),
                         r.get("away_score"),
                         r["winner"],
+                        r.get("game_type"),
                         now,
                     )
                     for r in rows

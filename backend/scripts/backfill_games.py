@@ -16,11 +16,14 @@ Defaults match the common Kaggle "games.csv" schema:
 winning team's id (matched against --col-home-team/--col-away-team).
 
 If the CSV has no season column, pass --derive-season to compute the
-season label from --col-date instead (Oct-Dec -> that year to next;
-Jan-Sep -> previous year to this one; the 2020 bubble finals, which ran
-into October, are treated as season 2019-20).
+season label from --col-date instead (Sep 15 onward belongs to the new
+season starting that year; before Sep 15 belongs to the previous one;
+the 2020 bubble finals, Sep 30 - Oct 12, are pinned to season 2019-20).
 
 --since-date YYYY-MM-DD skips rows dated before it.
+
+--col-game-type populates an optional game_type column (e.g. Regular/
+Playoffs/Preseason) when the CSV has one; silently omitted otherwise.
 
 game_date is always stored as YYYY-MM-DD (any time-of-day component in
 the source column is dropped).
@@ -72,13 +75,15 @@ def normalize_season(raw: str) -> str:
 
 
 def derive_season(d: date) -> str:
-    """Season label from a game date: Oct-Dec -> this year/next; Jan-Sep ->
-    previous year/this one. The 2020 bubble finals ran Sep 30 - Oct 12, so
-    that window is pinned to season 2019-20 (those October dates would
-    otherwise fall in 2020-21 under the plain month rule)."""
+    """Season label from a game date: Sep 15 onward (through December)
+    belongs to the new season starting that year; before Sep 15 belongs to
+    the previous year's season. The 2020 bubble finals ran Sep 30 - Oct 12,
+    so that window is pinned to season 2019-20 (it would otherwise fall in
+    2020-21 under the plain day-of-year rule)."""
     if _BUBBLE_FINALS_START <= d <= _BUBBLE_FINALS_END:
         return "2019-20"
-    year = d.year if d.month >= 10 else d.year - 1
+    new_season_started = d.month >= 10 or (d.month == 9 and d.day >= 15)
+    year = d.year if new_season_started else d.year - 1
     return f"{year}-{str(year + 1)[-2:]}"
 
 
@@ -134,12 +139,14 @@ def read_csv_rows(
     col_away_score: str,
     col_winner: Optional[str],
     since_date: Optional[date],
+    col_game_type: Optional[str],
 ) -> List[Dict]:
     rows: List[Dict] = []
     skipped = 0
     with csv_path.open(newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         fieldnames = set(reader.fieldnames or [])
+        has_game_type = bool(col_game_type) and col_game_type in fieldnames
 
         required = {col_game_id, col_date, col_home_team, col_away_team}
         if not derive_season_flag:
@@ -193,6 +200,7 @@ def read_csv_rows(
                         "home_score": home_score,
                         "away_score": away_score,
                         "winner": winner,
+                        "game_type": str(raw[col_game_type]).strip() if has_game_type else None,
                     }
                 )
             except (KeyError, ValueError) as exc:
@@ -241,6 +249,12 @@ def main() -> None:
         default=None,
         help="YYYY-MM-DD — skip rows dated before this.",
     )
+    parser.add_argument(
+        "--col-game-type",
+        default="GAME_TYPE",
+        help="Column holding the game type (e.g. Regular/Playoffs/Preseason), if present. "
+        "Silently omitted if the column isn't in the CSV.",
+    )
     args = parser.parse_args()
 
     if not args.csv.exists():
@@ -264,6 +278,7 @@ def main() -> None:
         col_away_score=args.col_away_score,
         col_winner=args.col_winner or None,
         since_date=since_date,
+        col_game_type=args.col_game_type or None,
     )
     written = store.upsert_many(rows)
     logger.info("Imported %d row(s) from %s (league_id=%s)", written, args.csv, args.league_id)
