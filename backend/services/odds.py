@@ -40,6 +40,14 @@ class OddsService:
     def __init__(self) -> None:
         self._api_key = get_settings().odds_api_key
         self._cache   = CacheDB(CACHE_DB_PATH)
+        # Quota signal from the most recent _fetch() call in this instance's
+        # lifetime. None until a real (non-cached) call has been made; a
+        # cache hit leaves these at whatever the last real call set (or None
+        # if there hasn't been one yet) and last_request_was_cached=True.
+        self.last_request_cost: Optional[int] = None
+        self.last_request_remaining: Optional[int] = None
+        self.last_request_used: Optional[int] = None
+        self.last_request_was_cached: Optional[bool] = None
 
     # ------------------------------------------------------------------
     # 1. Game lines
@@ -78,7 +86,12 @@ class OddsService:
 
         Each dict contains:
             game_id, commence_time, home_team, away_team, bookmaker,
-            home_american_odds, away_american_odds
+            bookmaker_last_update, home_american_odds, away_american_odds
+
+        bookmaker_last_update is the API's own per-bookmaker last_update
+        timestamp (when that book's line was actually quoted) — distinct
+        from when *this process* fetched it, which can lag by up to
+        _TTL_LINES if served from cache.
 
         Shares the same raw-response cache as get_nba_game_lines(), so calling
         both within the same TTL window costs at most one API call total.
@@ -111,6 +124,7 @@ class OddsService:
                         "home_team": home,
                         "away_team": away,
                         "bookmaker": bm["key"],
+                        "bookmaker_last_update": bm.get("last_update"),
                         "home_american_odds": home_odds,
                         "away_american_odds": away_odds,
                     }
@@ -123,6 +137,7 @@ class OddsService:
         raw_key = f"odds_lines_raw:{sport}"
         cached = self._cache.get(raw_key)
         if cached is not None:
+            self.last_request_was_cached = True
             return cached
 
         logger.info("API CALL  get_nba_game_lines  sport=%s", sport)
@@ -345,10 +360,15 @@ class OddsService:
             resp = requests.get(url, params=params, timeout=15)
             remaining = resp.headers.get("x-requests-remaining", "?")
             used      = resp.headers.get("x-requests-used", "?")
+            cost      = resp.headers.get("x-requests-last", "?")
             logger.info(
-                "Odds API  path=%s  status=%d  quota_remaining=%s  quota_used=%s",
-                path, resp.status_code, remaining, used,
+                "Odds API  path=%s  status=%d  cost=%s  quota_remaining=%s  quota_used=%s",
+                path, resp.status_code, cost, remaining, used,
             )
+            self.last_request_was_cached = False
+            self.last_request_cost = int(cost) if cost.isdigit() else None
+            self.last_request_remaining = int(remaining) if remaining.isdigit() else None
+            self.last_request_used = int(used) if used.isdigit() else None
             resp.raise_for_status()
             return resp.json()
         except requests.HTTPError as exc:

@@ -39,18 +39,27 @@ class OddsHistoryStore:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS odds_snapshots (
-                    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-                    fetched_at          TEXT NOT NULL,
-                    game_id             TEXT NOT NULL,
-                    commence_time       TEXT,
-                    home_team           TEXT NOT NULL,
-                    away_team           TEXT NOT NULL,
-                    bookmaker           TEXT NOT NULL,
-                    home_american_odds  INTEGER,
-                    away_american_odds  INTEGER
+                    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fetched_at             TEXT NOT NULL,
+                    game_id                TEXT NOT NULL,
+                    commence_time          TEXT,
+                    home_team              TEXT NOT NULL,
+                    away_team              TEXT NOT NULL,
+                    bookmaker              TEXT NOT NULL,
+                    bookmaker_last_update  TEXT,
+                    home_american_odds     INTEGER,
+                    away_american_odds     INTEGER
                 )
                 """
             )
+            # Migration for DBs created before bookmaker_last_update existed —
+            # add it in place rather than recreating the table, so existing
+            # snapshot rows survive.
+            existing_cols = {
+                row["name"] for row in conn.execute("PRAGMA table_info(odds_snapshots)")
+            }
+            if "bookmaker_last_update" not in existing_cols:
+                conn.execute("ALTER TABLE odds_snapshots ADD COLUMN bookmaker_last_update TEXT")
 
     def append_many(self, rows: List[Dict]) -> int:
         """Append *rows* as new snapshot rows. No dedupe — returns the count written."""
@@ -59,8 +68,8 @@ class OddsHistoryStore:
                 """
                 INSERT INTO odds_snapshots
                     (fetched_at, game_id, commence_time, home_team, away_team,
-                     bookmaker, home_american_odds, away_american_odds)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                     bookmaker, bookmaker_last_update, home_american_odds, away_american_odds)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -70,6 +79,7 @@ class OddsHistoryStore:
                         r["home_team"],
                         r["away_team"],
                         r["bookmaker"],
+                        r.get("bookmaker_last_update"),
                         r.get("home_american_odds"),
                         r.get("away_american_odds"),
                     )

@@ -7,6 +7,14 @@ makes at most one Odds API call (zero if the app already fetched within the
 last 30 minutes; see odds.py's _TTL_LINES). Append-only, no dedupe: run it
 as many times as you like to build up a price-movement history.
 
+Each row also stores the bookmaker's own last_update timestamp from the API
+response, alongside fetched_at (when this script ran) — the two can differ
+by up to _TTL_LINES (30 min) when the data was served from cache.
+
+Every run prints the credit cost and remaining monthly quota from the Odds
+API's x-requests-last / x-requests-remaining response headers (or says the
+call was served from cache, costing nothing).
+
 Usage (from backend/):
     python scripts/snapshot_odds.py
 """
@@ -42,6 +50,17 @@ def main() -> None:
 
     print(f"Wrote {written} row(s) to {store._path} (fetched_at={fetched_at})")
     print(f"Total rows in store: {store.total_count()}")
+
+    if odds.last_request_was_cached:
+        print("Odds API: served from cache — no credits spent this run.")
+    elif odds.last_request_cost is not None:
+        print(
+            f"Odds API: this call cost {odds.last_request_cost} credit(s); "
+            f"{odds.last_request_remaining} remaining this month "
+            f"(used={odds.last_request_used})."
+        )
+    else:
+        print("Odds API: quota headers unavailable for this run (fetch may have failed).")
 
 
 if __name__ == "__main__":
