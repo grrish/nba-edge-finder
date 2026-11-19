@@ -77,6 +77,8 @@ class TeamGame:
     points_for: int
     points_against: int
     won: bool
+    game_id: str
+    opponent: str
 
 
 def load_games(db_path: Path) -> List[sqlite3.Row]:
@@ -106,17 +108,24 @@ def _rolling_features(history: Deque[TeamGame], as_of: date) -> Tuple[float, flo
     return ppg, papg, winrate, rest_days
 
 
-def build_dataset(rows: List[sqlite3.Row]) -> Tuple[np.ndarray, np.ndarray, List[date]]:
+def build_dataset(
+    rows: List[sqlite3.Row],
+) -> Tuple[np.ndarray, np.ndarray, List[date], List[Dict]]:
     """Walk games chronologically, building per-team rolling history as we go.
 
     Every game updates history (including NULL-game_type rows — warm-up
     only). Only games with game_type in TARGET_GAME_TYPES, where both teams
     already have >= MIN_PRIOR_GAMES prior entries, become (X, y) rows.
+
+    Also returns *meta*, one dict per (X, y) row, carrying the game_id and
+    the exact prior-game snapshots (TeamGame, pre-update) each side's
+    features were computed from — used by the leakage audit, not training.
     """
     history: Dict[str, Deque[TeamGame]] = defaultdict(deque)
     X: List[List[float]] = []
     y: List[int] = []
     game_dates: List[date] = []
+    meta: List[Dict] = []
     skipped_insufficient_history = 0
     skipped_wrong_type = 0
 
@@ -143,18 +152,34 @@ def build_dataset(rows: List[sqlite3.Row]) -> Tuple[np.ndarray, np.ndarray, List
             X.append([h_ppg, h_papg, h_wr, h_rest, a_ppg, a_papg, a_wr, a_rest])
             y.append(1 if row["winner"] == "home" else 0)
             game_dates.append(game_date)
+            meta.append(
+                {
+                    "game_id": row["game_id"],
+                    "game_date": game_date,
+                    "home_team": home,
+                    "away_team": away,
+                    # Snapshot BEFORE this game is appended below — the
+                    # exact prior games the features above were computed from.
+                    "home_prior": list(home_hist)[-MIN_PRIOR_GAMES:],
+                    "away_prior": list(away_hist)[-MIN_PRIOR_GAMES:],
+                }
+            )
 
         # Update rolling history AFTER computing this game's features, from
         # every game regardless of game_type (warm-up rows included).
-        home_hist.append(TeamGame(game_date, home_score, away_score, row["winner"] == "home"))
-        away_hist.append(TeamGame(game_date, away_score, home_score, row["winner"] == "away"))
+        home_hist.append(
+            TeamGame(game_date, home_score, away_score, row["winner"] == "home", row["game_id"], away)
+        )
+        away_hist.append(
+            TeamGame(game_date, away_score, home_score, row["winner"] == "away", row["game_id"], home)
+        )
 
     logger.info(
         "Built %d training examples (skipped %d non-target-type rows, "
         "%d target-type rows with insufficient history)",
         len(X), skipped_wrong_type, skipped_insufficient_history,
     )
-    return np.array(X), np.array(y), game_dates
+    return np.array(X), np.array(y), game_dates, meta
 
 
 def time_split(
@@ -197,7 +222,7 @@ def main() -> None:
     rows = load_games(db_path)
     logger.info("Loaded %d NBA rows from %s", len(rows), db_path)
 
-    X, y, game_dates = build_dataset(rows)
+    X, y, game_dates, _meta = build_dataset(rows)
     if len(X) == 0:
         logger.error("No eligible training examples — check TARGET_GAME_TYPES / history depth.")
         sys.exit(1)
