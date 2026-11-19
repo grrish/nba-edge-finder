@@ -63,11 +63,7 @@ class OddsService:
         if cached is not None:
             return cached
 
-        logger.info("API CALL  get_nba_game_lines  sport=%s", sport)
-        raw = self._fetch(
-            f"/sports/{sport}/odds",
-            {"regions": _REGIONS, "markets": _LINE_MARKETS, "oddsFormat": _ODDS_FORMAT},
-        )
+        raw = self._get_raw_odds(sport)
         if raw is None:
             return []
 
@@ -75,6 +71,69 @@ class OddsService:
         logger.info("Parsed %d games with odds (sport=%s)", len(games), sport)
         self._cache.set(key, games, _TTL_LINES)
         return games
+
+    def get_nba_game_lines_by_bookmaker(self, sport: str = NBA_SPORT) -> List[Dict]:
+        """Return one row per (game, bookmaker) h2h moneyline — full breakdown,
+        not just the best price per side like get_nba_game_lines().
+
+        Each dict contains:
+            game_id, commence_time, home_team, away_team, bookmaker,
+            home_american_odds, away_american_odds
+
+        Shares the same raw-response cache as get_nba_game_lines(), so calling
+        both within the same TTL window costs at most one API call total.
+        """
+        raw = self._get_raw_odds(sport)
+        if raw is None:
+            return []
+
+        rows: List[Dict] = []
+        for g in raw:
+            game_id = g["id"]
+            home, away = g["home_team"], g["away_team"]
+            commence_time = g.get("commence_time", "")
+            for bm in g.get("bookmakers", []):
+                home_odds = away_odds = None
+                for mkt in bm.get("markets", []):
+                    if mkt["key"] != "h2h":
+                        continue
+                    for outcome in mkt.get("outcomes", []):
+                        if outcome["name"] == home:
+                            home_odds = int(outcome["price"])
+                        elif outcome["name"] == away:
+                            away_odds = int(outcome["price"])
+                if home_odds is None and away_odds is None:
+                    continue
+                rows.append(
+                    {
+                        "game_id": game_id,
+                        "commence_time": commence_time,
+                        "home_team": home,
+                        "away_team": away,
+                        "bookmaker": bm["key"],
+                        "home_american_odds": home_odds,
+                        "away_american_odds": away_odds,
+                    }
+                )
+        return rows
+
+    def _get_raw_odds(self, sport: str) -> Optional[List[Dict]]:
+        """Cached raw /odds response for *sport* — the shared source for both
+        get_nba_game_lines() and get_nba_game_lines_by_bookmaker()."""
+        raw_key = f"odds_lines_raw:{sport}"
+        cached = self._cache.get(raw_key)
+        if cached is not None:
+            return cached
+
+        logger.info("API CALL  get_nba_game_lines  sport=%s", sport)
+        raw = self._fetch(
+            f"/sports/{sport}/odds",
+            {"regions": _REGIONS, "markets": _LINE_MARKETS, "oddsFormat": _ODDS_FORMAT},
+        )
+        if raw is None:
+            return None
+        self._cache.set(raw_key, raw, _TTL_LINES)
+        return raw
 
     def _parse_game(self, raw: Dict) -> Dict:
         home = raw["home_team"]

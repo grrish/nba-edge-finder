@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # backfilled team-level results indefinitely until re-backfilled.
     games_history_db_path: str = "data/games_history.db"
 
+    # Odds snapshot collector — persistent, append-only SQLite store,
+    # relative to backend/. Separate from cache.db: rows accumulate across
+    # runs rather than expiring.
+    odds_history_db_path: str = "data/odds_history.db"
+
     @field_validator("environment")
     @classmethod
     def validate_environment(cls, v: str) -> str:
